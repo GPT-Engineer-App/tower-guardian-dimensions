@@ -1,5 +1,5 @@
-import { useRef, useState } from 'react';
-import { useFrame } from '@react-three/fiber';
+import { useRef, useState, useEffect } from 'react';
+import { useFrame, useThree } from '@react-three/fiber';
 import { Box, Sphere } from '@react-three/drei';
 
 const Tower = ({ position }) => {
@@ -10,19 +10,25 @@ const Tower = ({ position }) => {
   );
 };
 
-const Enemy = ({ position, onReachEnd }) => {
+const Enemy = ({ position, onReachEnd, onDestroy }) => {
   const ref = useRef();
-  const [reachedEnd, setReachedEnd] = useState(false);
+  const [health, setHealth] = useState(100);
 
   useFrame(() => {
-    if (ref.current && !reachedEnd) {
+    if (ref.current) {
       ref.current.position.z += 0.05;
       if (ref.current.position.z > 10) {
-        setReachedEnd(true);
         onReachEnd();
+        onDestroy();
       }
     }
   });
+
+  useEffect(() => {
+    if (health <= 0) {
+      onDestroy();
+    }
+  }, [health, onDestroy]);
 
   return (
     <Sphere ref={ref} position={position} args={[0.5, 32, 32]}>
@@ -31,36 +37,60 @@ const Enemy = ({ position, onReachEnd }) => {
   );
 };
 
-const GameScene = () => {
+const GameScene = ({ onEnemyReachEnd, onEnemyDestroy, onPlaceTower }) => {
   const [enemies, setEnemies] = useState([]);
   const [towers, setTowers] = useState([]);
-  const [lives, setLives] = useState(10);
+  const { camera, scene } = useThree();
 
-  const spawnEnemy = () => {
-    const x = Math.random() * 10 - 5;
-    setEnemies([...enemies, { id: Date.now(), position: [x, 0.5, -10] }]);
-  };
+  useEffect(() => {
+    const spawnInterval = setInterval(() => {
+      const x = Math.random() * 10 - 5;
+      setEnemies(prev => [...prev, { id: Date.now(), position: [x, 0.5, -10] }]);
+    }, 2000);
 
-  const placeTower = (x, z) => {
-    setTowers([...towers, { id: Date.now(), position: [x, 1, z] }]);
-  };
+    return () => clearInterval(spawnInterval);
+  }, []);
 
-  const handleEnemyReachEnd = () => {
-    setLives(lives - 1);
+  const handlePlaceTower = (event) => {
+    if (event.button !== 0) return; // Only place tower on left click
+
+    const raycaster = new THREE.Raycaster();
+    const mouse = new THREE.Vector2();
+
+    mouse.x = (event.clientX / window.innerWidth) * 2 - 1;
+    mouse.y = -(event.clientY / window.innerHeight) * 2 + 1;
+
+    raycaster.setFromCamera(mouse, camera);
+
+    const intersects = raycaster.intersectObjects(scene.children, true);
+
+    if (intersects.length > 0) {
+      const { x, z } = intersects[0].point;
+      setTowers(prev => [...prev, { id: Date.now(), position: [x, 1, z] }]);
+      onPlaceTower();
+    }
   };
 
   return (
-    <>
+    <group onClick={handlePlaceTower}>
       <Box position={[0, -0.5, 0]} args={[20, 1, 20]}>
         <meshStandardMaterial color="green" />
       </Box>
       {enemies.map((enemy) => (
-        <Enemy key={enemy.id} position={enemy.position} onReachEnd={handleEnemyReachEnd} />
+        <Enemy
+          key={enemy.id}
+          position={enemy.position}
+          onReachEnd={onEnemyReachEnd}
+          onDestroy={() => {
+            setEnemies(prev => prev.filter(e => e.id !== enemy.id));
+            onEnemyDestroy();
+          }}
+        />
       ))}
       {towers.map((tower) => (
         <Tower key={tower.id} position={tower.position} />
       ))}
-    </>
+    </group>
   );
 };
 

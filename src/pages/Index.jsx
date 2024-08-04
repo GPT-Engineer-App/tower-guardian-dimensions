@@ -5,6 +5,8 @@ import GameScene from '../components/GameScene';
 import UI from '../components/UI';
 
 const Index = () => {
+  const { UI: UIComponent, handlers } = UI({ onStartWave: () => console.log('Wave started') });
+
   return (
     <div className="w-full h-screen relative">
       <Canvas className="w-full h-full">
@@ -12,10 +14,14 @@ const Index = () => {
           <OrbitControls />
           <ambientLight intensity={0.5} />
           <directionalLight position={[10, 10, 5]} intensity={1} />
-          <GameScene />
+          <GameScene
+            onEnemyReachEnd={handlers.handleEnemyReachEnd}
+            onEnemyDestroy={handlers.handleEnemyDestroy}
+            onPlaceTower={handlers.handlePlaceTower}
+          />
         </Suspense>
       </Canvas>
-      <UI />
+      {UIComponent}
     </div>
   );
 };
